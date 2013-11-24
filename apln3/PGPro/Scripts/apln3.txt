@@ -1,0 +1,13 @@
+/*Apln2.cwx*/
+
+Rexx script for write circle text, with TrueSpectra.
+
+/**********************************************************/
+/*Roberto Gainza                                          */
+/*zikonyl@attglobal.net                                   */
+/*Special thanks to Team OS/2 spain for your help         */
+/*   http://www.os2spain.org                              */
+/*Free and not warranty for it                            */
+/*****bye bye**********************************************/
+
+

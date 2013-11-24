@@ -1,0 +1,380 @@
+/* PhotoGraphics CD Label Builder Aug 8,2006*/
+/* jan lambert snapdrgn@cruzio.com         */
+/*            Credits                      */
+/*******************************************/
+/* Alpn2.cwx  Create circular text         */
+/* Roberto Gainza   zikonyl@attglobal.net  */
+/* Team OS/2 spain  http://www.os2spain.org */
+/*******************************************/
+
+if \rxFuncQuery('SysLoadFuncs') then do
+	call RxFuncAdd 'SysLoadFuncs', 'RexxUtil', 'SysLoadFuncs'
+	call SysLoadFuncs
+end
+
+numeric digits 12
+rev=2045.1136
+cr='0A'x
+lf='0D'x
+pi=3.14159265359
+
+Debug = 0    /* set to 1 to show rexx console */
+Metric=0     /*set to 1 if output dimensions are metric*/
+             /*if metric, speciy label in CM */
+
+/* US Letter size Media Labels : Avery wide format aka CD Stomper*/
+/* Assumes HP Deskjet 855: Minimum left margin 0.28  minimum top margin 0.04 */
+
+/*   set PhotoPro output to 8.50 X 11.0 inches */
+/*   left margin 0.28  top margin 0.04  */
+
+Label.=''
+Label.0=2                /*cutouts/page   : 2 max */
+label._SheetWidth=8.5
+Label._SheetHeight=11.0
+Label._Diameter=4.75      /*size of a CD label: slight bleed over Perf line: inches*/
+label._HoleDiameter=1.60  /* center blank, slight bleed from Label */
+                          /* after much trial i pulled the numbers below out of my ass */
+label._ctrX.1=2.5665      /* Upper label X Y centers */
+label._ctrY.1=8.0826
+label._ctrX.2=5.4388      /* lower label */
+label._ctrY.2=2.9510
+
+/* end of media discription*/
+
+/*Process*/
+/*create a visual reference (Target+Hole) and background (Label) for the label*/
+/* Target = visual size/position reference : Deleted before printing*/
+/* Hole = visual reference : Prints crosshair in center area on white*/
+/* Label = label background: User modifiable */
+/* TxtW_# = Wrapped Text Custom regions : These are Groups of individual characters!*/
+/* all objects are Fixed and Locked, but can be moved with digital control box*/
+
+if metric then I2M=2.54     /*correct internal constants to metric*/
+else I2M=1                  /* Does NOT effect Label.# dimensions!! */
+
+TxtBoxRadius=(label._HoleDiameter+label._Diameter)/4  /*default location radius*/
+WrappedTxt=0   /*wrapped text object counter*/
+objTxtBox=0   /*current text object*/
+
+hBaseView=CwGetCurrentView()      /*Get the big picture*/
+rc= pos(rxMessageBox('Want Instructions?','CD LabelBuilder','YESNOCANCEL','QUERY'),'672')
+
+select     /*sign on*/
+	when rc=1 then do
+		call cwShowRexxConsole
+		call help
+	end
+	when rc=3 then exit /*abort*/
+	when debug then call cwShowRexxConsole
+	otherwise  call cwHideRexxConsole
+end
+
+do forever
+	rc= pos(rxMessageBox('Select Label 1 (Yes), Label 2 (No), Finished (Cancel)','Wrap Text','YESNOCANCEL','QUERY'),'672')
+	select
+		when rc=1 then CD=1  /*work on Label 1*/
+		when rc=2 then CD=2
+		otherwise            /*all done. Clean up and exit*/
+		if cwIsHandleValid(objTxtBox) then call CwDeleteObject objTxtBox
+		do CD=1 to Label.0
+			if cwIsHandleValid(Label._Target.CD) then call CwDeleteObject 	Label._Target.CD
+			if cwIsHandleValid(label._HoleColor.CD) then do
+				call CwSetProperty label._HoleColor.CD, "Color", "(255,255,255)"  /*set the color*/
+				call CwMoveObjectToFront label._Hole.CD
+			end
+		end
+		call cwSelectView hBaseView
+		call cwSetSelectionRectangle Label._SheetWidth/2,Label._SheetHeight/2,1,1 /*put selection in safe spot*/
+		call CwSetViewZoom Label._SheetWidth/2,Label._SheetHeight/2,Label._SheetWidth,Label._SheetHeight
+		exit
+	end
+	Xcenter=label._ctrX.CD
+	Ycenter=label._ctrY.CD
+	if \cwIsHandleValid(label._Target.CD) then label._Target.CD=BuildTarget()
+	if \cwIsHandleValid(label._Hole.CD) then parse value BuildHole() with label._Hole.CD label._HoleColor.CD
+	if \cwIsHandleValid(label._Label.CD) then parse value BuildLabel() with label._Label.CD
+	call CwMoveObjectToFront label._Hole.CD
+	call makeLabel
+end
+
+makeLabel:           /*setup is complete, now wrap some text*/
+	rc=0
+	do forever
+		if cwIsHandleValid(objTxtBox) then call CwSelectObject(objTxtBox)
+		if rc=0 then do
+			rc=rxMessageBox('Select and Setup Text Then click ok','Wrap Text','OKCANCEL','NONE')
+			if rc=2 then leave
+		end
+		else do
+			rc=rxMessageBox(rc||cr||'Fix then Click OK','TextBox Error','OKCANCEL','ERROR')
+			if rc=2 then leave
+		end
+		rc= ValidateTxtBox(cwGetSelectedObject())
+		if rc=0 then do
+			objTxtBox=cwGetSelectedObject()
+			rc=setup()
+			if rc=0 then call WrapText
+		end
+	end
+return
+
+WrapText:       /*create wrapped text*/
+	if \debug then call CwStopRender hBaseView       /*disable rendering while we work*/
+	WrappedTxt=WrappedTxt+1  /*maintain a count*/
+	cName='TxtW_'||WrappedTxt
+	objW = CwCreateEffect("Custom Region", "Solid Colour")    /*create a Bent Text region*/
+	call CwSetPosition objW, Xcenter, YCenter,label._Diameter,label._Diameter, 0, 0     /*set position and size*/
+	toolW = CwGetTool(objW)
+	regionW = CwGetRegion(objW)
+	call CwSetProperty toolW, "Color", txtColor  /*set the color*/
+	viewW = CwGetView(objW)    /*get a handle*/
+	objWrap=cwAddObjectToGroup(objW,0)   /*build a group*/
+	call CwSetProperty objWrap,'Name',cName
+	call CwSetProperty objWrap,'Fixed Aspect',1
+	call CwSetProperty objWrap,'Lock',1
+	call CwSelectView viewW   /*select the region*/
+	cH=txtBoxHeight
+	cW=TxtBoxWidth/TxtCount
+	slots=1+TxtCirc%cW      /*number of character slots available*/
+	slotA=360/slots       /*slot width:degrees*/
+	startAngle=360-(slotA*(TxtCount-1)/2)+wrap
+
+	do n=0 to TxtCount-1
+		Angle=startAngle+n*slotA
+		tilt=360-Angle +wrap
+		Rads=Angle*2*Pi/360     /*radianes*/
+		x1c=(WrapRadius)*seno(Rads)+Xcenter
+		y1c=(WrapRadius)*coseno(Rads)+Ycenter
+		if wrap=0 then char=substr(txtText,n+1,1)   /*get letter*/
+		else char=substr(txtText,TxtCount-n,1)
+		objCutout = CwCreateEffect("Block Text", "Solid Color")
+		rhCutout = CwGetRegion(objCutout)
+		thCutout = CwGetTool(objCutout)
+		call CwSetPosition objCutout,x1c,y1c, cW, cH, Tilt , 0
+		call CwSetProperty thCutout, "Color", TxtColor
+		call cwsetproperty rhCutout,"Caption",char
+		call cwsetproperty rhCutout,"Font",txtFont
+		call cwsetproperty rhCutout,"Justification",txtJust
+		call cwsetproperty rhCutout,"Line Spacing","1.2"
+		call cwsetproperty rhCutout,"Line Length","1"
+		call cwAddObjectToGroup objCutout,objWrap   /*group*/
+	end
+	if \debug then call CwStartRender hBaseView    /* Enable Rendering */
+return 0
+
+setup:      /*get and check the text box setup */
+	toolTxtBox = CwGetTool(objTxtBox)
+	regionTxtBox=CwGetRegion(objTxtBox)
+	txtText= cwGetproperty(regionTxtBox,"Caption" )  /*text: 1 line only!*/
+	txtCount=length(txtText)           /*actual character count*/
+	if txtCount=0 then return 'No text found'
+	txtFont=translate(cwGetproperty(regionTxtBox,"Font" ))
+	if (pos('TIMES',txtFont)=0 & pos('COURIER',txtFont)=0) then return 'Font must be Courier or Times'
+	txtBoxHeight=cwGetproperty(objTxtBox,"Position:Height"  )   /*get all the info*/
+	txtBoxWidth=cwGetproperty(objTxtBox,"Position:Width"  )
+	txtBoxX=cwGetproperty(objTxtBox,"Position:X Center"  )
+	txtBoxY=cwGetproperty(objTxtBox,"Position:Y Center"  )
+	WrapRadius=abs(Ycenter-txtBoxY)      /*Vertical radius from ctr to text ctr*/
+	if (Ycenter-txtBoxY)>0 then wrap=180    /*wrap with feet out*/
+	else wrap =0            /*wrap with feet in*/
+	if WrapRadius>label._Diameter/2 | WrapRadius<label._HoleDiameter/2 then do
+		call rxMessageBox "Text center must be between hole and rim!"cr"Using default position"
+		say wrapRadius TxtBoxRadius Ycenter
+		WrapRadius=TxtBoxRadius
+		if wrap=0 then txtBoxY=Ycenter+WrapRadius
+		else txtBoxY=Ycenter-WrapRadius
+		call cwSetPosition objTxtBox,TxtBoxX,txtBoxY,txtBoxWidth,txtBoxHeight,0,0
+	end
+	txtCirc=2*pi*(WrapRadius-txtBoxHeight/2)             /*circumference at text inner edge*/
+	if txtCirc<txtBoxWidth then return "Text Box is too wide to wrap at this radius"
+	txtBoxX=Xcenter
+	txtFont= cwGetproperty(regionTxtBox,"Font")
+	txtJust="Center"
+	txtSpacing=1.2
+	if cwGetProperty(objTxtBox,"Region Type")="Headline Text" then txtLL=length(txtText)
+	else txtLL=cwGetproperty(regionTxtBox,"Line Length"  )   /*kerning in eM's */
+	txtRed=cwGetproperty(toolTxtBox,"Color:Red")
+	txtBlue=cwGetproperty(toolTxtBox,"Color:Blue")
+	txtGreen=cwGetproperty(toolTxtBox,"Color:Green")
+	txtColor="("txtRed','txtGreen','txtBlue')'
+return 0
+
+ValidateTxtBox:   procedure  /*Get textbox handle*/
+	parse arg obj
+	if \CwIsHandleValid(obj) then return 'Text Object not selected!'
+	if cwGetHandleType(obj)<>"Effect" then return 'Text object not selected!'
+	if cwGetProperty(obj,"Region Type")<>"Headline Text" then return 'Select Headline Text!'
+	if cwGetProperty(obj,"Tool Type")<>"Solid Colour" then return 'Text must be Solid Color!'
+return 0 /*ok*/
+
+BuildTarget:  /*build a visual reference target*/
+	objCD1 = CwCreateEffect("Ellipse", "Solid Colour")    /*create a CD label target*/
+	call CwSetPosition objCD1, Xcenter, YCenter, label._Diameter+0.1*I2M, label._Diameter+0.1, 0, 0   /*set position and size*/
+	toolCD1 = CwGetTool(objCD1)
+	call CwSetProperty toolCD1, "Color", "(0,0,0)"  /*set the color*/
+
+	objCD2 = CwCreateEffect("Ellipse", "Solid Colour")    /*create a CD label target*/
+	call CwSetPosition objCD2, Xcenter, YCenter, label._Diameter, label._Diameter, 0, 0   /*set position and size*/
+	toolCD2 = CwGetTool(objCD2)
+	call CwSetProperty toolCD2, "Color", "(255,255,255)"  /*set the color*/
+
+	objTarget=cwAddObjectToGroup(objCD2,0)   /*build a target group*/
+	call cwAddObjectToGroup objCD1,objTarget
+	call CwSetProperty objTarget,'Name','Target'||CD
+	call CwSetProperty objTarget, 'Fixed Aspect', 1    /*nail in place*/
+	call CwSetProperty objTarget,'Lock',1
+return objTarget
+
+BuildHole:   /*build centermask and target*/
+	objCD1 = CwCreateEffect("Ellipse", "Solid Colour")    /*create a CD hole*/
+	call CwSetPosition objCD1, Xcenter, YCenter, label._HoleDiameter, label._HoleDiameter, 0, 0     /*set position and size*/
+	call CwSetProperty objCD1, "Name", "CtrMask"||CD
+	toolCD1 = CwGetTool(objCD1)
+	call CwSetProperty toolCD1, "Color", "(201,201,201)"  /*set the color*/
+	call CwMoveObjectToFront objCD1
+
+	objCD2 = CwCreateEffect("Ellipse", "Solid Colour")    /*create a CD center dot*/
+	call CwSetPosition objCD2, Xcenter, YCenter, 0.05*I2M, 0.05*I2M, 0, 0     /*set position and size*/
+	toolCD2 = CwGetTool(objCD2)
+	call CwSetProperty toolCD2, "Color", "(0,0,0)"  /*set the color*/
+	call CwMoveObjectToFront objCD2
+
+	objCD3 = CwCreateEffect("Rectangle", "Solid Colour")    /*create a crosshair*/
+	call CwSetPosition objCD3, Xcenter, YCenter,label._HoleDiameter/2,0.01*I2M , 0, 0     /*set position and size*/
+	toolCD3 = CwGetTool(objCD3)
+	call CwSetProperty toolCD3, "Color", "(0,0,0)"  /*set the color*/
+
+	objCD4 = CwCreateEffect("Rectangle", "Solid Colour")    /*create a CD crosshair*/
+	call CwSetPosition objCD4, Xcenter, YCenter, 0.01*I2M ,label._HoleDiameter/2, 0,0     /*set position and size*/
+	toolCD4 = CwGetTool(objCD4)
+	call CwSetProperty toolCD4, "Color", "(0,0,0)"  /*set the color*/
+
+	objHole=cwAddObjectToGroup(objCD2,0)   /*build a hole group*/
+	call cwAddObjectToGroup objCD3,objHole
+	call cwAddObjectToGroup objCD4,objHole
+	call cwAddObjectToGroup objCD1,objHole
+	call CwSetProperty objHole,'Name','Hole'||CD
+	call CwSetProperty objHole, 'Fixed Aspect', 1    /*nail in place*/
+	call CwSetProperty objHole,'Lock',1
+return objHole ToolCD1   /*return object + color tool*/
+
+BuildLabel:   /*build the actual label Ellipse, solid color default*/
+	objLabel = CwCreateEffect("Ellipse", "Solid Colour")    /*create label background*/
+	call CwSetPosition objLabel, Xcenter, YCenter, label._Diameter, label._Diameter, 0, 0   /*set position and size*/
+	call CwSetProperty objLabel,'Name','Label'||CD
+	call CwSetProperty objLabel, 'Fixed Aspect', 1    /*nail in place*/
+	call CwSetProperty objLabel,'Lock',1
+	toolLabel = CwGetTool(objLabel)
+	call cwsetproperty toollabel, "color", "(204,255,204)"  /*set the color*/
+return objlabel
+
+Help:
+	say "Objects:"
+	say "Target is a visual reference: Deleted before printing"
+	say "Label is a solid Ellipse which is the background: User modifiable at anytime"
+	say "Hole is a visual reference and printing mask: don't change!"
+	say "TxtW_# are Custom Regions of Grouped text (wrapped); adjust with digital controls"
+	say "Currently ONLY Solid Color Headline text is supported"
+	say ''
+	say 'Position Text center at the radius desired.'
+	say 'If above center, text wraps toes in, if below, text wraps toes out.'
+	say 'Allowable Fonts: Courier and Times only, may be standard or Bold.'
+	say 'When done adding text and setting the background, press the cancel button.'
+	say 'Targets will be deleted, Holes set to white.'
+	say ''
+return
+
+/*Trig routines from Roberto Gainza */
+	/* ================================================================== */
+	/* seno(x)                                                             */
+	/*                                                                    */
+	/* Method:                                                            */
+	/*   x is first reduced so that ABS(x) <= pi/2. Then a polynomial     */
+	/*   approximation is used for evaluation.                            */
+	/*                                                                    */
+
+seno: PROCEDURE
+	ARG x
+	CALL argtest "seno",x
+	s=SIGN(x)
+	x=ABS(x)
+	x = x//6.28318530718
+	IF x > 3.14159265359 THEN
+	DO
+		x = x - 3.14159265359
+		s = -s
+	END
+	IF x > 1.57079632679 THEN x = 3.14159265359 - x
+	y = x*x
+	x = s*x*(((((-.0000000239*y + .0000027526)*y - .0001984090)*y + .0083333315)*y - .1666666664)*y + 1)
+
+RETURN x
+
+	/* ================================================================== */
+	/* coseno(x)                                                             */
+	/*                                                                    */
+	/* Method:                                                            */
+	/*   x is first reduced so that ABS(x) <= pi/2. Then a                */
+	/*   polynomial approximation is used for evaluation.                 */
+	/*                                                                    */
+coseno: PROCEDURE
+	ARG x
+	CALL argtest "coseno",x
+	s=1
+	x=ABS(x)
+	x = x//6.28318530718
+	IF x > 3.14159265359 THEN
+	DO
+		x = x - 3.14159265359
+		s = -s
+	END
+	IF x > 1.57079632679 THEN DO
+		x = 3.14159265359 - x
+		s = -s
+	END
+	y = x*x
+	x = s*(((((-.0000002605*y + .0000247609)*y - .0013888397)*y +  .0416666418)*y - .4999999963)*y + 1)
+RETURN x
+
+	/* ================================================================== */
+	/* atan(x)                                                            */
+	/*                                                                    */
+	/* Method:                                                            */
+	/*   Use atan(x) = pi/4 - atan((1-x)/(1+x)).  Evaluate                */
+	/*   the latter function usenog a polynomial approximation, taking     */
+	/*   advantage of the fact that its argument is less than one as      */
+	/*   long as x > -1.                                                  */
+	/*                                                                    */
+
+atan: PROCEDURE
+	ARG x
+	CALL argtest "atan",x
+	IF x = 0 THEN RETURN 0
+	s=SIGN(x)
+	x=ABS(x)
+	x = (x - 1)/(x + 1)
+	y = x*x
+	x = ((((((((.0028662257*y - .0161657367)*y + .0429096138)*y - .0752896400)*y + .1065626393)*y - .1420889944)*y + .1999355085)*y - .3333314528)*y + 1)*x
+RETURN .785398163397 + s*x
+
+	/* ------------------------------------------------------------------ */
+	/* function: check if the argument for a function is numeric          */
+	/*                                                                    */
+	/* call:     ArgTest functionName, functionArgument                   */
+	/*                                                                    */
+	/* where:    functionName - name of the function                      */
+	/*           functionArgument - argument for the function             */
+	/*                                                                    */
+	/* returns:  nothing                                                  */
+	/*                                                                    */
+	/* note:     exits the program if the argument is not numeric         */
+	/*                                                                    */
+
+Argtest: PROCEDURE
+	PARSE ARG name,x
+	IF DATATYPE(x,"N") THEN RETURN
+	SAY name "argument" x "not a number."
+	EXIT
+
+

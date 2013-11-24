@@ -1,0 +1,191 @@
+/*apln.cwx    polygon of n sides  */
+call RxFuncAdd 'SysLoadFuncs', 'RexxUtil', 'SysLoadFuncs'
+call SysLoadFuncs
+numeric digits 12
+pi=3.14159265359
+/***min.=3 max=100 (you can modify it)*********************/
+numlados=6   /**change this value for other number of sizes **/
+/*****************************************************/
+
+call continue
+exit
+
+Continue:
+
+/* Prompt user for color of starburst and wait for them to click OK */
+/*
+if Instances = 0 then
+        exit
+  */
+/* Assemble the starting and ending shadow colors */
+
+/*SC1=255;SC2=125;SC3=0*/
+SC1=0;SC2=0;SC3=0
+/* Stop drawing until we've setup the display */
+Window=CwGetCurrentView()
+call CwStopRender window
+
+/* Create a custom region to hold the starburst */
+Burst = CwCreateEffect("Custom Region", "Solid Color")
+w1=7;h1=7 ;xcent=4;ycent=4
+call CwSetPosition Burst, XCent, YCent, W1, H1, 0, 0
+BurstTool = CwGetTool(Burst)
+call CwSetProperty BurstTool, "Color", '('SC1','SC2','SC3')'
+BurstView = CwGetView(CwGetRegion(Burst))
+call CwSelectView BurstView
+
+/* Draw the yellow base for the starburst */
+Base = CwCreateEffect("Rectangle", "Solid Color")
+w1=7;h1=7 /*lados del cuadrado base*/
+call CwSetPosition Base, XCent, YCent, W1, H1, 0, 0
+BaseTool = CwGetTool(Base)
+call CwSetProperty BaseTool, "Color", '('sc1','sc2','sc3')'
+
+/* Now overlay white ellipses to create the bursting effect */
+/*radio 1.5 ; ancho del rectangulo 2 ; largo 5;  */
+rad=1;ancho=3.8;largo=9
+
+
+/*check number of sides  100 (by the time for made it), not small that 3 sides*/
+if numlados<3 then numlados=3
+if numlados>100 then do
+ numlados=3
+ RC=RxMessageBox("If you indicate more that 100 sizes, the aplication change to 3, by the time for made it. You can change the rexx scrit. " ,"TO MANY SIDES","OK")
+end
+
+do n=0 to numlados-1
+	angulop=360*n/numlados
+	/*pasarlo a radianes*/
+	angulop=angulop*2*Pi/360
+	angulo=(360/numlados)
+	if n=0 then
+	do
+	inclinacion=180
+	end
+	else
+	do
+	inclinacion=inclinacion-angulo
+        /*if inclinacion>180 then inclinacion=inclinacion-180
+        if inclinacion<180 then inclinacion=inclinacion+180*/
+	end
+
+	x1c=(rad+ancho/2)*seno(angulop)+4
+	y1c=(rad+ancho/2)*coseno(angulop)+4
+	/*RC=RxMessageBox("VALORES DEL RECTANGULO x , y, angulop inclinacion " x1c y1c angulop inclinacion ,"Merge?","OK")*/
+	Cutout = CwCreateEffect("Rectangle", "Solid Color")
+	call CwSetPosition Cutout,x1c,y1c, largo, ancho, inclinacion, 0
+	CutTool = CwGetTool(Cutout)
+	call CwSetProperty CutTool, "Color", "(255,255,255)"
+end
+
+/* Now render the screen for the user */
+/*Window=CwGetCurrentView()*/
+call CwStartRender window
+
+return
+
+/* ================================================================== */
+ /* seno(x)                                                             */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   x is first reduced so that ABS(x) <= pi/2. Then a polynomial     */
+ /*   approximation is used for evaluation.                            */
+ /*                                                                    */
+
+ seno: PROCEDURE
+   ARG x
+   CALL argtest "seno",x
+   s=SIGN(x)
+   x=ABS(x)
+   x = x//6.28318530718
+   IF x > 3.14159265359 THEN
+   DO
+     x = x - 3.14159265359
+     s = -s
+   END
+   IF x > 1.57079632679 THEN
+     x = 3.14159265359 - x
+   y = x*x
+   x = s*x*(((((-.0000000239*y + .0000027526)*y - .0001984090)*y + .0083333315)*y - .1666666664)*y + 1)
+ RETURN x
+
+ /* ================================================================== */
+ /* coseno(x)                                                             */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   x is first reduced so that ABS(x) <= pi/2. Then a                */
+ /*   polynomial approximation is used for evaluation.                 */
+ /*                                                                    */
+ coseno: PROCEDURE
+   ARG x
+   CALL argtest "coseno",x
+   s=1
+   x=ABS(x)
+   x = x//6.28318530718
+   IF x > 3.14159265359 THEN
+   DO
+     x = x - 3.14159265359
+     s = -s
+   END
+   IF x > 1.57079632679 THEN
+   DO
+     x = 3.14159265359 - x
+     s = -s
+   END
+   y = x*x
+   x = s*(((((-.0000002605*y + .0000247609)*y - .0013888397)*y +  .0416666418)*y - .4999999963)*y + 1)
+ RETURN x
+
+ /* ================================================================== */
+ /* atan(x)                                                            */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   Use atan(x) = pi/4 - atan((1-x)/(1+x)).  Evaluate                */
+ /*   the latter function usenog a polynomial approximation, taking     */
+ /*   advantage of the fact that its argument is less than one as      */
+ /*   long as x > -1.                                                  */
+ /*                                                                    */
+ atan: PROCEDURE
+   ARG x
+   CALL argtest "atan",x
+   IF x = 0 THEN
+     RETURN 0
+   s=SIGN(x)
+   x=ABS(x)
+   x = (x - 1)/(x + 1)
+   y = x*x
+   x = ((((((((.0028662257*y - .0161657367)*y + .0429096138)*y - .0752896400)*y + .1065626393)*y - .1420889944)*y + .1999355085)*y - .3333314528)*y + 1)*x
+ RETURN .785398163397 + s*x
+
+
+
+ /* ------------------------------------------------------------------ */
+ /* function: check if the argument for a function is numeric          */
+ /*                                                                    */
+ /* call:     ArgTest functionName, functionArgument                   */
+ /*                                                                    */
+ /* where:    functionName - name of the function                      */
+ /*           functionArgument - argument for the function             */
+ /*                                                                    */
+ /* returns:  nothing                                                  */
+ /*                                                                    */
+ /* note:     exits the program if the argument is not numeric         */
+ /*                                                                    */
+ Argtest: PROCEDURE
+   PARSE ARG name,x
+
+   IF DATATYPE(x,"N") THEN
+     RETURN
+   SAY name "argument" x "not a number."
+ EXIT
+/******************************************/
+/*Roberto Gainza                                             */
+/*zikonyl@attglobal.net                                     */
+/*Special thanks to Team OS/2 spain for your help*/
+/*   http://www.os2spain.org                              */
+/*Free and not warranty for it                           */
+/*****bye bye******************************/
+
+
+
+

@@ -1,0 +1,77 @@
+CDLabelMaker            8 Aug 2006
+
+CDLabelMaker is a rexx script for TrueSpectra's PhotoGraphicPro to
+interactively make CD and DVD labels.
+
+It requires PhotoGraphicPro, available on Hobbes, and rexx support
+enabled. It has been tested with Object Rexx only, but i don't
+see any requirements that preclude Classic Rexx.
+
+Setup:
+
+Move CDLamelmaker.cwx to pgpro\scripts, fire up pgPro and load
+a new project. Use Cntrl-T to set the output parameters to
+8.5 x 11.0 inches, and top margin= 0.04, left margin=0.28.
+Now Cntrl-Z to run the script.
+
+If you ask for instructions, it will open the rexx console if
+it's not already open and give some basic info. No proceeds
+directly to the next query, Cancel exits the script.
+
+Assuming you didn't cancel, you will get another message box,
+Wrap Text, asking which label to build. Cancel ends the process.
+Click Yes to start with the upper label. A label should magicly
+appear. Labels have three basic components; a Target (black/white)
+which defines the outer boundary, a Hole (grey with black centering
+dot and cross hair) which defines the inner boundary and a Label,
+(green) which is the background for your design. You may play with
+the label but not with the Target or Hole. When you are done wrapping
+text, the Targets will be deleted and the Holes will be convered to
+white except for the crosshair and centering dot.
+
+You are now ready to wrap some text. Create a Solid Color Headline
+Text box of appropriate size, and enter some text. Position the
+Vertical center (horizontal is not important) between the Hole and
+outer edge of the Label. Click Ok. A group, TxtW_1, will be created
+if possible, otherwise you should get an error message and must
+correct your error (there are no program errors:) before proceeding.
+The TxtW group can be manipulated with the digital controls.
+
+When done adding wrapped text, press cancel, which will get you back
+to the label choice message. You can now do label 2. Pressing
+cancel ends the program, and erases the targets and the Headline text
+object you have been using. You may now add effects, non-wrapped text
+or other embellishents until you are ready to print.
+
+Wrapped text are actually individual block text regions of one
+character each grouped in a custom region which can be scaled, rotated,
+etc as an object.
+
+The page description is at the start of the program and must be
+modified if you are not using CD Stomper labels. These labels are
+2-up in opposing corners with jewel case labels. The X-Y centers
+of the labels must be specified in an obscure frame of reference,
+so the easiest option is to print a dummy set of labels on plain
+paper and adjust the coordinates until the crosshairs print in the
+correct place. Be sure to change the pgPro output specs to match
+the printer/sheet you are using. If you are using metric (cm)
+dimensions in pgPro, you must use them for all the label.* variables,
+but do not change interior program variables. Metric has not been tested!
+
+Credits:
+
+TrueSpectra for making pgPro available!
+
+The text rotation stuff, and math routines are from Apln2.cwx
+ *Roberto Gainza   zikonyl@attglobal.net
+ *Team OS/2 spain  http://www.os2spain.org
+
+The program is free, not copyrighted and not copyrightable.
+
+Warrentee:
+If works then jan <- credit
+else AoG rules apply.
+
+Fixes/comments:
+jan lambert   snapdrgn@cruzio.com
+

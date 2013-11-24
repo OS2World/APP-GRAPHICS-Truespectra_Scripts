@@ -1,0 +1,201 @@
+/* Alpn2.cwx  Create circular text */
+/*************************************************/
+/**You can change this values, after = modify    */
+/*************************************************/
+eltexto="You can change this text, but not more of 254 bytes---Hello!!------You can write spaces, and others...                     "
+/*eltexto="Aqui no       "*/
+SpaceInterSciences=0.9 /*0 not is valid,but 0.321 is ok*/
+HeightSciences=7       /*0 not is valid,but 0.321 is ok*/
+Fonts="Times New Roman Bold"
+/*Fonts="Courier"*/
+/*Fonts="Courier Bold"*/
+Justifi="Center"
+Rad=1 /*radio circle*/
+
+/***NOT MODIFY ****/
+/******************/
+call RxFuncAdd 'SysLoadFuncs', 'RexxUtil', 'SysLoadFuncs'
+call SysLoadFuncs
+
+numeric digits 12
+pi=3.14159265359
+call poliN
+exit
+
+
+poliN:
+
+col1=255; col2=0 ; col3=0
+/*iniciar un nuevo dibujo */
+cuadro=CwGetCurrentView()
+call CwStopRender cuadro
+
+w1=14;h1=14 ;xcent=4;ycent=4
+
+/*Crear custon region */
+Cregion = CwCreateEffect("Custom Region", "Solid Color")
+call CwSetPosition Cregion, XCent, YCent, W1, H1, 0, 0
+CregionTool = CwGetTool(Cregion)
+call CwSetProperty CregionTool, "Color", '('col1','col2','col3')'
+/*call CwSetProperty CregionTool, "Color", '(0,0,192)'*/
+CregionView = CwGetView(CwGetRegion(Cregion))
+call CwSelectView CregionView
+
+
+
+/* Valores por defecto de inicio */
+ancho=3.8;largo=9
+
+numlados=length(eltexto)
+/*numlados=40*/
+ancho=(ancho*HeightSciences) / numlados
+largo=largo /( numlados*SpaceInterSciences)
+
+if numlados<3 then numlados=3
+
+do n=0 to numlados-1
+        angulop=360*n/numlados
+        /*pasarlo a radianes*/
+        angulop=angulop*2*Pi/360
+        angulo=(360/numlados)
+        if n=0 then
+        do
+        inclinacion=180
+        end
+        else
+        do
+        inclinacion=inclinacion-angulo
+        end
+        x1c=(rad+ancho/2)*seno(angulop)+4
+        y1c=(rad+ancho/2)*coseno(angulop)+4
+        /*RC=RxMessageBox("VALORES DEL RECTANGULO x , y, angulop inclinacion " x1c y1c angulop inclinacion ,"verlos","OK")*/
+        Cutout = CwCreateEffect("Block Text", "Solid Color")
+        r = CwGetRegion(cutout)
+        call CwSetPosition Cutout,x1c,y1c, largo, ancho, inclinacion, 0
+        CutTool = CwGetTool(Cutout)
+        call CwSetProperty cuttool, "Color", "(0,0,255)"
+       /*busca la letra */
+       amostrar=substr(eltexto,numlados-n,1)
+       call cwsetproperty r,"Caption",amostrar
+       call cwsetproperty r,"Font",Fonts
+       call cwsetproperty r,"Justification",Justifi
+       call cwsetproperty r,"Line Spacing","1.2"
+       call cwsetproperty r,"Line Length","1"
+
+end
+
+/* crea un solo dibujo que engloba a todos los demas */
+
+call CwStartRender cuadro
+return
+
+exit
+
+/* ================================================================== */
+ /* seno(x)                                                             */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   x is first reduced so that ABS(x) <= pi/2. Then a polynomial     */
+ /*   approximation is used for evaluation.                            */
+ /*                                                                    */
+
+ seno: PROCEDURE
+   ARG x
+   CALL argtest "seno",x
+   s=SIGN(x)
+   x=ABS(x)
+   x = x//6.28318530718
+   IF x > 3.14159265359 THEN
+   DO
+     x = x - 3.14159265359
+     s = -s
+   END
+   IF x > 1.57079632679 THEN
+     x = 3.14159265359 - x
+   y = x*x
+   x = s*x*(((((-.0000000239*y + .0000027526)*y - .0001984090)*y + .0083333315)*y - .1666666664)*y + 1)
+ RETURN x
+
+ /* ================================================================== */
+ /* coseno(x)                                                             */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   x is first reduced so that ABS(x) <= pi/2. Then a                */
+ /*   polynomial approximation is used for evaluation.                 */
+ /*                                                                    */
+ coseno: PROCEDURE
+   ARG x
+   CALL argtest "coseno",x
+   s=1
+   x=ABS(x)
+   x = x//6.28318530718
+   IF x > 3.14159265359 THEN
+   DO
+     x = x - 3.14159265359
+     s = -s
+   END
+   IF x > 1.57079632679 THEN
+   DO
+     x = 3.14159265359 - x
+     s = -s
+   END
+   y = x*x
+   x = s*(((((-.0000002605*y + .0000247609)*y - .0013888397)*y +  .0416666418)*y - .4999999963)*y + 1)
+ RETURN x
+
+ /* ================================================================== */
+ /* atan(x)                                                            */
+ /*                                                                    */
+ /* Method:                                                            */
+ /*   Use atan(x) = pi/4 - atan((1-x)/(1+x)).  Evaluate                */
+ /*   the latter function usenog a polynomial approximation, taking     */
+ /*   advantage of the fact that its argument is less than one as      */
+ /*   long as x > -1.                                                  */
+ /*                                                                    */
+ atan: PROCEDURE
+   ARG x
+   CALL argtest "atan",x
+   IF x = 0 THEN
+     RETURN 0
+   s=SIGN(x)
+   x=ABS(x)
+   x = (x - 1)/(x + 1)
+   y = x*x
+   x = ((((((((.0028662257*y - .0161657367)*y + .0429096138)*y - .0752896400)*y + .1065626393)*y - .1420889944)*y + .1999355085)*y - .3333314528)*y + 1)*x
+ RETURN .785398163397 + s*x
+
+
+
+ /* ------------------------------------------------------------------ */
+ /* function: check if the argument for a function is numeric          */
+ /*                                                                    */
+ /* call:     ArgTest functionName, functionArgument                   */
+ /*                                                                    */
+ /* where:    functionName - name of the function                      */
+ /*           functionArgument - argument for the function             */
+ /*                                                                    */
+ /* returns:  nothing                                                  */
+ /*                                                                    */
+ /* note:     exits the program if the argument is not numeric         */
+ /*                                                                    */
+ Argtest: PROCEDURE
+   PARSE ARG name,x
+
+   IF DATATYPE(x,"N") THEN
+     RETURN
+   SAY name "argument" x "not a number."
+ EXIT
+/******************************************/
+/*Roberto Gainza                                             */
+/*zikonyl@attglobal.net                                     */
+/*Special thanks to Team OS/2 spain for your help*/
+/*   http://www.os2spain.org                              */
+/*Free and not warranty for it                           */
+/*****bye bye******************************/
+
+
+
+
+
+
+
